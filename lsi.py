@@ -1,9 +1,10 @@
 from collections import defaultdict
-from scipy.sparse import *
-from scipy import *
+from scipy.sparse import csc_matrix
+from scipy import array
 import sys
 import glob
 import os
+from sparsesvd import sparsesvd
 
 
 class SparseMatrix(object):
@@ -63,7 +64,7 @@ class TermDoc(object):
                 # The word hasn't been seen yet
                 self._words.append(token)
                 token_ind = len(self._words) - 1
-            self._matrix.set(doc_ind, token_ind, self._matrix.get(doc_ind, token_ind) + 1)
+            self._matrix.set(token_ind, doc_ind, self._matrix.get(token_ind, doc_ind) + 1)
 
     def __str__(self):
         return str(self._matrix)
@@ -71,7 +72,6 @@ class TermDoc(object):
 
 class LSI(object):
     def __init__(self, corpus):
-        print corpus
         term_doc = TermDoc()
         for document in corpus:
             # Tokenize/stem each document
@@ -79,7 +79,11 @@ class LSI(object):
             # Add it to the sparse term-document matrix
             term_doc.add_document(document, tokens)
         # Calculate the SVD
-        print term_doc._matrix.as_csc().todense()
+        self.T, self.s, self.D = sparsesvd(term_doc._matrix.as_csc(), 100)
+
+    def query(self, query_string):
+        tokens = process_document(query_string)
+        self.term_doc.get_term_vector(tokens)
 
 
 def process_document(doc):
