@@ -1,6 +1,8 @@
 from collections import defaultdict
 from scipy.sparse import csc_matrix
 from scipy import array
+from scipy.spatial.distance import cosine
+import numpy
 import sys
 import glob
 import os
@@ -42,6 +44,13 @@ class SparseMatrix(object):
                 data.append(self._matrix[row][col])
         return (data, rows, cols)
 
+    def unpacked(self):
+        matrix = [[0 for _ in xrange(self.max_col + 1)] for _ in xrange(self.max_row + 1)]
+        for row in self._matrix:
+            for col in self._matrix[row]:
+                matrix[row][col] = self._matrix[row][col]
+        return matrix
+
     def as_csc(self):
         data, rows, cols = self.as_indexed()
         return csc_matrix((array(data), (array(rows), array(cols))))
@@ -51,12 +60,21 @@ class TermDoc(object):
     def __init__(self):
         self._words = []
         self._documents = []
-        # Placeholder class for now
         self._matrix = SparseMatrix()
 
     def add_document(self, document, tokens):
         self._documents.append(document)
         doc_ind = len(self._documents) - 1
+        for token in tokens:
+            try:
+                token_ind = self._words.index(token)
+            except ValueError:
+                # The word hasn't been seen yet
+                self._words.append(token)
+                token_ind = len(self._words) - 1
+            self._matrix.set(token_ind, doc_ind, self._matrix.get(token_ind, doc_ind) + 1)
+
+    def get_term_vector(self, tokens):
         for token in tokens:
             try:
                 token_ind = self._words.index(token)
@@ -78,8 +96,19 @@ class LSI(object):
             tokens = process_document(document)
             # Add it to the sparse term-document matrix
             term_doc.add_document(document, tokens)
+        print len(term_doc._words), len(term_doc._documents)
         # Calculate the SVD
-        self.T, self.s, self.D = sparsesvd(term_doc._matrix.as_csc(), 100)
+        self.T, self.s, self.D = sparsesvd(term_doc._matrix.as_csc(), 300)
+        # Recreate the original matrix
+        # print numpy.dot(self.T.T, numpy.dot(numpy.diag(self.s), self.D))
+
+    def doc_similarity(self):
+        sim_matrix = [[0 for _ in xrange(self.D.shape[1])] for _ in xrange(self.D.shape[1])]
+        for row, vec1 in enumerate(self.D):
+            for col, vec2 in enumerate(self.D):
+                print cosine(vec1, vec2)
+                sim_matrix[row][col] = cosine(vec1, vec2)
+        return sim_matrix
 
     def query(self, query_string):
         tokens = process_document(query_string)
@@ -96,3 +125,4 @@ def process_document(doc):
 if __name__ == "__main__":
     corpus = glob.glob(os.path.join(sys.argv[1], '*'))
     a = LSI(corpus)
+    print a.doc_similarity()
